@@ -1,0 +1,297 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATTACH-VRD V2</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#eef2f7;color:#17324b}
+header{background:#123654;color:white;padding:20px}
+header h2{margin:0 0 6px}
+nav{display:flex;gap:7px;overflow:auto;background:white;padding:10px}
+button{background:#126caa;color:white;border:0;border-radius:7px;padding:11px;cursor:pointer}
+nav button{white-space:nowrap}
+main{max-width:1100px;margin:auto;padding:14px}
+section{display:none}
+section.active{display:block}
+.card{background:white;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 5px #ccd5df}
+label{display:block;margin:10px 0 4px;font-weight:bold}
+input,select,textarea{width:100%;padding:10px;border:1px solid #ccd4dd;border-radius:6px;font-size:15px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{border:1px solid #ccd4dd;padding:7px;text-align:left}
+th{background:#e6edf5}
+.scroll{overflow-x:auto}
+.small{font-size:12px;color:#667}
+.total{font-size:20px;font-weight:bold;text-align:right;margin:15px 0}
+.danger{background:#ad3030}
+.ok{color:#16804a}
+@media print{
+header,nav,main,#actions{display:none!important}
+#printArea{display:block!important}
+}
+#printArea{display:none;background:white;padding:12px;color:black}
+#printArea table{font-size:10px}
+#printArea th,#printArea td{border:1px solid black}
+</style>
+</head>
+<body>
+<header>
+<h2>ATTACH-VRD V2</h2>
+<div>Gestion des attachements VRD</div>
+</header>
+<nav>
+<button onclick="show('market')">Marché</button>
+<button onclick="show('bpu')">Importer BPU</button>
+<button onclick="show('newat')">Nouvel AT</button>
+<button onclick="show('archives')">Archives</button>
+<button onclick="backup()">Sauvegarde</button>
+</nav>
+<main>
+<section id="market" class="active">
+<div class="card">
+<h3>Informations du marché</h3>
+<label>N° Marché</label>
+<input id="marche" value="31/2026/AOE">
+<label>Société</label>
+<input id="societe" value="MULT INFRA">
+<label>Nature des travaux</label>
+<input id="nature" placeholder="Ex: Sondage">
+<label>Abréviation</label>
+<input id="code" placeholder="Ex: SND" maxlength="12">
+<label>OT N°</label>
+<input id="ot">
+<label>Adresse du chantier</label>
+<textarea id="adresse"></textarea>
+<button onclick="saveMarket()">Enregistrer</button>
+</div>
+</section>
+
+<section id="bpu">
+<div class="card">
+<h3>Importation du BPU</h3>
+<p>Importer le BPU MULT INFRA Excel ou CSV.</p>
+<input type="file" id="file" accept=".xlsx,.xls,.csv">
+<p class="small">Les colonnes reconnues : N° prix, Désignation, Quantité marché, Unité, PU HT.</p>
+<button onclick="importBPU()">Importer</button>
+<p id="importStatus"></p>
+</div>
+<div class="card">
+<h3>Articles importés : <span id="count">0</span></h3>
+<input id="search" placeholder="Rechercher un prix ou une désignation" oninput="renderBPU()">
+<div class="scroll"><table>
+<thead><tr><th>Prix</th><th>Désignation</th><th>Unité</th><th>Qté marché</th><th>PU HT</th></tr></thead>
+<tbody id="bpuRows"></tbody>
+</table></div>
+</div>
+</section>
+
+<section id="newat">
+<div class="card">
+<h3>Nouvel attachement</h3>
+<label>Date début travaux</label>
+<input type="date" id="debut">
+<label>Date fin travaux</label>
+<input type="date" id="fin">
+<label>Date attachement</label>
+<input type="date" id="dateAT">
+<label>N° RC</label>
+<input id="rc">
+<label>Dossier</label>
+<input id="dossier">
+<p id="refPreview"></p>
+</div>
+<div class="card">
+<h3>Quantités exécutées</h3>
+<input id="filterAT" placeholder="Rechercher un article" oninput="renderAT()">
+<div class="scroll"><table>
+<thead><tr><th>Prix</th><th>Désignation</th><th>Unité</th><th>PU HT</th><th>Qté présente</th></tr></thead>
+<tbody id="atRows"></tbody>
+</table></div>
+<div class="total" id="totalAT">0,00 DH</div>
+<button onclick="validateAT()">Valider l'attachement</button>
+</div>
+</section>
+
+<section id="archives">
+<div class="card">
+<h3>Attachements validés</h3>
+<div class="scroll"><table>
+<thead><tr><th>Doc Réf</th><th>Date</th><th>Nature</th><th>Montant HT</th><th>Action</th></tr></thead>
+<tbody id="archiveRows"></tbody>
+</table></div>
+</div>
+</section>
+</main>
+
+<div id="printArea"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+const KEY="attach_vrd_v2";
+let db=JSON.parse(localStorage.getItem(KEY)||'{"market":{},"bpu":[],"ats":[]}');
+let draft={};
+
+const $=id=>document.getElementById(id);
+const money=n=>Number(n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>{
+ if(typeof v==="number")return v;
+ let s=String(v??"").replace(/\s/g,"");
+ if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");
+ return Number(s)||0;
+};
+function persist(){localStorage.setItem(KEY,JSON.stringify(db))}
+function show(id){
+ document.querySelectorAll("main section").forEach(s=>s.classList.remove("active"));
+ $(id).classList.add("active");
+ if(id==="bpu")renderBPU();
+ if(id==="newat")renderAT();
+ if(id==="archives")renderArchives();
+}
+function saveMarket(){
+ const code=$("code").value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+ if(!code){alert("Indiquer l'abréviation de la nature des travaux");return}
+ db.market={
+ marche:$("marche").value,
+ societe:$("societe").value,
+ nature:$("nature").value,
+ code,ot:$("ot").value,adresse:$("adresse").value
+ };
+ persist();alert("Marché enregistré");
+}
+function loadMarket(){
+ const m=db.market;
+ ["marche","societe","nature","code","ot","adresse"].forEach(k=>{
+ if(m[k]!==undefined)$(k).value=m[k]
+ });
+}
+function pick(row,words){
+ const keys=Object.keys(row);
+ const key=keys.find(k=>words.some(w=>k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").includes(w)));
+ return key?row[key]:"";
+}
+async function importBPU(){
+ const f=$("file").files[0];
+ if(!f){alert("Choisir un fichier");return}
+ if(typeof XLSX==="undefined"){
+ alert("Connexion Internet nécessaire pour charger le lecteur Excel");
+ return;
+ }
+ try{
+ const data=await f.arrayBuffer();
+ const wb=XLSX.read(data,{type:"array"});
+ const ws=wb.Sheets[wb.SheetNames[0]];
+ const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+ const articles=rows.map((r,i)=>({
+ id:String(pick(r,["n° prix","n prix","numero prix","prix"])||"").trim(),
+ name:String(pick(r,["designation","description"])||"").trim(),
+ unit:String(pick(r,["unite"])||"").trim(),
+ contract:num(pick(r,["quantite marche","quantite"])),
+ pu:num(pick(r,["pu ht","cout unitaire","prix unitaire"]))
+ })).filter(a=>a.name&&a.unit);
+ if(!articles.length)throw Error("Colonnes BPU non reconnues");
+ const missing=articles.filter(a=>!a.id).length;
+ if(!confirm(articles.length+" articles détectés, dont "+missing+" sans N° prix. Importer ?"))return;
+ db.bpu=articles.map((a,i)=>({...a,key:String(i)}));
+ persist();renderBPU();
+ $("importStatus").textContent=articles.length+" articles importés. Vérifier les numéros de prix.";
+ }catch(e){alert("Erreur import : "+e.message)}
+}
+function renderBPU(){
+ $("count").textContent=db.bpu.length;
+ const q=$("search").value.toLowerCase();
+ $("bpuRows").innerHTML=db.bpu.filter(a=>(a.id+" "+a.name).toLowerCase().includes(q)).map(a=>
+ `<tr><td>${esc(a.id)}</td><td>${esc(a.name)}</td><td>${esc(a.unit)}</td><td>${money(a.contract)}</td><td>${money(a.pu)}</td></tr>`
+ ).join("");
+}
+function nextNumber(code){
+ return 1+db.ats.filter(a=>a.code===code).reduce((max,a)=>Math.max(max,a.seq||0),0);
+}
+function refFor(code,seq,date){
+ const month=String(date||"").slice(5,7)||"00";
+ return "DNA-"+code+"/AT"+String(seq).padStart(3,"0")+"-"+month;
+}
+function renderAT(){
+ const code=db.market.code||"";
+ const date=$("dateAT").value||new Date().toISOString().slice(0,10);
+ $("refPreview").textContent=code?"Prochain Doc Réf : "+refFor(code,nextNumber(code),date):"Enregistrer d'abord le marché et la nature";
+ const q=$("filterAT").value.toLowerCase();
+ $("atRows").innerHTML=db.bpu.map((a,i)=>({...a,i})).filter(a=>(a.id+" "+a.name).toLowerCase().includes(q)).map(a=>
+ `<tr><td>${esc(a.id)}</td><td>${esc(a.name)}</td><td>${esc(a.unit)}</td><td>${money(a.pu)}</td><td><input type="number" min="0" step="any" style="width:95px" value="${draft[a.key]??""}" onchange="setQty('${a.key}',this.value)"></td></tr>`
+ ).join("");
+ calculate();
+}
+function setQty(key,v){draft[key]=Math.max(0,num(v));calculate()}
+function calculate(){
+ let total=db.bpu.reduce((s,a)=>s+(draft[a.key]||0)*a.pu,0);
+ $("totalAT").textContent=money(total)+" DH HT";
+}
+function validateAT(){
+ const m=db.market;
+ if(!m.code||!m.marche){alert("Enregistrer le marché");return}
+ if(!db.bpu.length){alert("Importer le BPU");return}
+ const date=$("dateAT").value;
+ if(!date){alert("Indiquer la date d'attachement");return}
+ const items=db.bpu.filter(a=>num(draft[a.key])>0).map(a=>({
+ id:a.id,name:a.name,unit:a.unit,pu:a.pu,qty:num(draft[a.key]),key:a.key
+ }));
+ if(!items.length){alert("Saisir au moins une quantité");return}
+ const seq=nextNumber(m.code);
+ const ref=refFor(m.code,seq,date);
+ const total=items.reduce((s,a)=>s+a.qty*a.pu,0);
+ if(!confirm("Valider "+ref+" pour "+money(total)+" DH HT ?"))return;
+ db.ats.push({
+ ref,seq,code:m.code,date,items,total,
+ market:{...m},
+ debut:$("debut").value,fin:$("fin").value,
+ rc:$("rc").value,dossier:$("dossier").value
+ });
+ persist();draft={};renderAT();show("archives");
+}
+function renderArchives(){
+ $("archiveRows").innerHTML=db.ats.map((a,i)=>
+ `<tr><td>${esc(a.ref)}</td><td>${esc(a.date)}</td><td>${esc(a.code)}</td><td>${money(a.total)}</td><td><button onclick="printAT(${i})">Imprimer</button></td></tr>`
+ ).join("");
+}
+function printAT(i){
+ const a=db.ats[i],m=a.market;
+ const rows=a.items.map(x=>`
+ <tr><td></td><td>${esc(x.id)}</td><td>${esc(x.name)}</td><td>${esc(x.unit)}</td><td>${money(x.qty)}</td><td></td></tr>`).join("");
+ $("printArea").innerHTML=`
+ <div style="text-align:center">
+ <b>DIRECTION D'EXPLOITATION RABAT</b><br>
+ SERVICE TRAVAUX EAU & ASSAINISSEMENT ET RÉSEAUX BRANCHEMENTS
+ <h2>ATTACHEMENT</h2></div>
+ <table>
+ <tr><td>Adresse du chantier</td><td>${esc(m.adresse)}</td><td>OT N°</td><td>${esc(m.ot)}</td></tr>
+ <tr><td>Nature des travaux</td><td>${esc(m.nature)}</td><td>Société</td><td>${esc(m.societe)}</td></tr>
+ <tr><td>Date début travaux</td><td>${esc(a.debut)}</td><td>N° Attachement</td><td>${a.seq}</td></tr>
+ <tr><td>Date fin travaux</td><td>${esc(a.fin)}</td><td>N° RC</td><td>${esc(a.rc)}</td></tr>
+ <tr><td>MARCHÉ N°</td><td>${esc(m.marche)}</td><td>Doc Réf</td><td><b>${esc(a.ref)}</b></td></tr>
+ <tr><td>Dossier</td><td colspan="3">${esc(a.dossier)}</td></tr>
+ </table><br>
+ <table>
+ <thead><tr><th>Code A15</th><th>Prix</th><th>Désignation des ouvrages</th><th>Unité</th><th>Qté</th><th>OBS</th></tr></thead>
+ <tbody>${rows}</tbody>
+ </table>
+ <p style="text-align:right"><b>Montant HT : ${money(a.total)} DH</b></p>
+ <div style="display:flex;justify-content:space-between;margin-top:50px">
+ <div>Pour l'Entreprise : ${esc(m.societe)}<br><br>Signature et Cachet :</div>
+ <div>Pour REDAL :<br><br>Signature et Cachet :</div>
+ </div>`;
+ window.print();
+}
+function backup(){
+ const blob=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");a.href=url;a.download="ATTACH-VRD-backup.json";a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+loadMarket();
+$("dateAT").value=new Date().toISOString().slice(0,10);
+renderBPU();
+</script>
+</body>
+</html>
