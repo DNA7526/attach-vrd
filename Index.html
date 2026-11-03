@@ -1,1 +1,326 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12345a">
+<title>ATTACH-VRD</title>
+<style>
+:root{--navy:#12345a;--blue:#1769c2;--bg:#f3f6fa;--line:#dce4ee;--text:#1d2d42}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)}
+header{background:var(--navy);color:white;padding:22px 18px 18px}
+header h1{font-size:23px;margin:0}
+header p{opacity:.8;margin:5px 0 0;font-size:12px}
+main{max-width:850px;margin:auto;padding:15px 15px 95px}
+.card{background:white;border:1px solid var(--line);border-radius:15px;padding:16px;margin-bottom:14px;box-shadow:0 2px 7px #142e4a08}
+h2{font-size:17px;margin:0 0 14px}
+h3{font-size:14px;margin:14px 0 8px}
+label{display:block;font-size:12px;font-weight:600;margin:12px 0 5px}
+input,select{width:100%;padding:12px;border:1px solid #ccd7e3;border-radius:9px;font-size:15px;background:white;color:var(--text)}
+button{border:0;border-radius:9px;padding:12px 15px;font-size:14px;font-weight:650;cursor:pointer}
+.primary{background:var(--blue);color:white}
+.secondary{background:#eaf1fa;color:var(--navy)}
+.danger{background:#fff0f0;color:#ad2424}
+.full{width:100%;margin-top:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:#edf4ff;border-radius:12px;padding:13px}
+.metric small{display:block;color:#62768d;font-size:11px}
+.metric strong{display:block;margin-top:6px;font-size:19px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:570px}
+th,td{padding:10px 7px;border-bottom:1px solid var(--line);text-align:left}
+th{background:#eef3f9}
+td input{padding:8px;width:80px;font-size:13px}
+nav{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:9px 3px calc(9px + env(safe-area-inset-bottom))}
+nav button{background:transparent;color:#66778b;font-size:11px;padding:7px 4px}
+nav button.active{color:var(--blue);background:#eaf3ff}
+.page{display:none}.page.active{display:block}
+.item{border:1px solid var(--line);border-radius:11px;padding:12px;margin:10px 0}
+.muted{color:#718095;font-size:12px}
+.pill{display:inline-block;background:#e7f5ee;color:#137c49;padding:4px 8px;border-radius:30px;font-size:11px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions button{flex:1}
+@media(max-width:380px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>ATTACH-VRD</h1>
+<p>Gestion des attachements VRD • Personal V1</p>
+</header>
+
+<main>
+<section id="home" class="page active">
+<div class="card">
+<h2>Tableau de bord</h2>
+<div class="grid">
+<div class="metric"><small>Marchés</small><strong id="nbMarkets">0</strong></div>
+<div class="metric"><small>Attachements</small><strong id="nbAttach">0</strong></div>
+<div class="metric"><small>Montant cumulé</small><strong id="totalAmount">0 DH</strong></div>
+<div class="metric"><small>Dernier OT</small><strong id="lastOT">—</strong></div>
+</div>
+</div>
+<div class="card">
+<h2>Bienvenue</h2>
+<p>Crée ton marché, ajoute les articles du BPU et saisis les quantités exécutées à chaque attachement.</p>
+<p class="muted">Les données restent enregistrées dans ce navigateur uniquement. Elles ne sont pas synchronisées entre iPhone et Windows.</p>
+<button class="primary full" onclick="go('markets')">Commencer</button>
+</div>
+</section>
+
+<section id="markets" class="page">
+<div class="card">
+<h2>Marché VRD</h2>
+<label>Numéro du marché</label>
+<input id="marketNumber" placeholder="M-2026-001">
+<label>Désignation</label>
+<input id="marketName" placeholder="Travaux AEP et assainissement">
+<label>Maître d'ouvrage</label>
+<input id="owner" placeholder="Maître d'ouvrage">
+<label>Entreprise</label>
+<input id="company" placeholder="Entreprise titulaire">
+<label>Montant du marché (DH)</label>
+<input id="contractAmount" type="number" min="0" step="0.01">
+<button class="primary full" onclick="saveMarket()">Enregistrer le marché</button>
+</div>
+<div class="card">
+<h2>Marché actif</h2>
+<div id="marketSummary" class="muted">Aucun marché</div>
+</div>
+</section>
+
+<section id="bpu" class="page">
+<div class="card">
+<h2>Ajouter un article BPU</h2>
+<div class="grid">
+<div><label>N° prix</label><input id="articleNumber" placeholder="101"></div>
+<div><label>Unité</label><select id="articleUnit"><option>ml</option><option>m³</option><option>m²</option><option>U</option><option>kg</option><option>forfait</option></select></div>
+</div>
+<label>Désignation</label>
+<input id="articleName" placeholder="Conduite PVC DN300">
+<div class="grid">
+<div><label>Prix unitaire (DH)</label><input id="articlePrice" type="number" min="0" step="0.01"></div>
+<div><label>Quantité marché</label><input id="articleQuantity" type="number" min="0" step="0.001"></div>
+</div>
+<button class="primary full" onclick="addArticle()">Ajouter au BPU</button>
+</div>
+<div class="card">
+<h2>Articles du BPU</h2>
+<div id="articleList"></div>
+</div>
+</section>
+
+<section id="ot" class="page">
+<div class="card">
+<h2>Ordre de travail</h2>
+<label>Numéro OT</label><input id="otNumber" placeholder="OT-042">
+<label>Objet des travaux</label><input id="otName" placeholder="Réparation réseau AEP">
+<label>Localisation</label><input id="otLocation" placeholder="Rabat">
+<div class="grid">
+<div><label>Date début</label><input id="otStart" type="date"></div>
+<div><label>Date fin</label><input id="otEnd" type="date"></div>
+</div>
+<button class="primary full" onclick="saveOT()">Enregistrer l'OT</button>
+</div>
+<div class="card">
+<h2>OT actif</h2>
+<div id="otSummary" class="muted">Aucun OT</div>
+</div>
+</section>
+
+<section id="attachments" class="page">
+<div class="card">
+<h2>Nouvel attachement</h2>
+<label>Date de l'attachement</label><input id="attachDate" type="date">
+<label>Référence</label><input id="attachRef" placeholder="AT-001">
+<p class="muted">Saisis uniquement les quantités exécutées pour cet attachement. Le cumul est calculé automatiquement.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th>Article</th><th>PU</th><th>Antérieur</th><th>Actuel</th><th>Cumul</th><th>Montant actuel</th></tr></thead>
+<tbody id="entryRows"></tbody>
+</table>
+</div>
+<div class="metric" style="margin-top:14px"><small>Montant du présent attachement</small><strong id="currentTotal">0 DH</strong></div>
+<button class="primary full" onclick="saveAttachment()">Valider l'attachement</button>
+</div>
+</section>
+
+<section id="history" class="page">
+<div class="card">
+<h2>Suivi des attachements</h2>
+<label>Filtrer par mois</label><input id="monthFilter" type="month" onchange="renderHistory()">
+<button class="secondary full" onclick="document.getElementById('monthFilter').value='';renderHistory()">Tous les mois</button>
+<div id="historyList"></div>
+</div>
+<div class="card">
+<h2>Sauvegarde</h2>
+<p class="muted">Exporte régulièrement tes données. Effacer les données du navigateur peut supprimer les enregistrements locaux.</p>
+<div class="actions">
+<button class="secondary" onclick="exportJSON()">Sauvegarde JSON</button>
+<button class="secondary" onclick="exportCSV()">Export CSV</button>
+</div>
+</div>
+</section>
+</main>
+
+<nav>
+<button id="tab-home" class="active" onclick="go('home')">⌂<br>Accueil</button>
+<button id="tab-markets" onclick="go('markets')">▣<br>Marché</button>
+<button id="tab-bpu" onclick="go('bpu')">≡<br>BPU</button>
+<button id="tab-ot" onclick="go('ot')">▤<br>OT</button>
+<button id="tab-attachments" onclick="go('attachments')">＋<br>Attacher</button>
+<button id="tab-history" onclick="go('history')">◷<br>Suivi</button>
+</nav>
+
+<script>
+const KEY="attach_vrd_personal_v1";
+let db;
+try{
+ db=JSON.parse(localStorage.getItem(KEY))||{};
+}catch(e){db={}}
+db.market=db.market||null;
+db.articles=db.articles||[];
+db.ot=db.ot||null;
+db.attachments=db.attachments||[];
+
+const $=id=>document.getElementById(id);
+const money=n=>Number(n||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DH";
+const number=id=>Number($(id).value||0);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>new Date().toLocaleDateString("en-CA");
+
+function persist(){
+ try{localStorage.setItem(KEY,JSON.stringify(db));return true}
+ catch(e){alert("Sauvegarde impossible. Vérifie le stockage du navigateur.");return false}
+}
+function go(page){
+ document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===page));
+ document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("active",x.id==="tab-"+page));
+ render();
+ window.scrollTo(0,0);
+}
+function saveMarket(){
+ const id=$("marketNumber").value.trim();
+ const name=$("marketName").value.trim();
+ if(!id||!name)return alert("Numéro et désignation obligatoires.");
+ if(db.market&&db.market.id!==id&&db.attachments.length)return alert("Impossible de changer de marché après saisie d'attachements.");
+ db.market={id,name,owner:$("owner").value,company:$("company").value,amount:number("contractAmount")};
+ if(persist()){render();alert("Marché enregistré.")}
+}
+function addArticle(){
+ const code=$("articleNumber").value.trim(),name=$("articleName").value.trim();
+ const price=number("articlePrice"),qty=number("articleQuantity");
+ if(!db.market)return alert("Crée d'abord le marché.");
+ if(!code||!name||price<0||qty<0||!Number.isFinite(price)||!Number.isFinite(qty))return alert("Vérifie les champs.");
+ if(db.articles.some(a=>a.code===code))return alert("Ce numéro de prix existe déjà.");
+ db.articles.push({code,name,unit:$("articleUnit").value,price,qty});
+ if(persist()){
+ ["articleNumber","articleName","articlePrice","articleQuantity"].forEach(id=>$(id).value="");
+ render();
+ }
+}
+function removeArticle(code){
+ if(db.attachments.length)return alert("Suppression désactivée après le premier attachement.");
+ if(!confirm("Supprimer cet article ?"))return;
+ db.articles=db.articles.filter(a=>a.code!==code);
+ persist();render();
+}
+function saveOT(){
+ if(!$("otNumber").value.trim())return alert("Numéro OT obligatoire.");
+ db.ot={number:$("otNumber").value.trim(),name:$("otName").value,location:$("otLocation").value,start:$("otStart").value,end:$("otEnd").value};
+ if(persist()){render();alert("OT enregistré.")}
+}
+function previousQty(code){
+ return db.attachments.reduce((s,at)=>s+(Number(at.lines.find(l=>l.code===code)?.qty)||0),0);
+}
+function renderEntry(){
+ $("entryRows").innerHTML=db.articles.map((a,i)=>{
+ const prev=previousQty(a.code);
+ return `<tr><td><b>${esc(a.code)}</b><br>${esc(a.name)}<br><small>${esc(a.unit)}</small></td><td>${money(a.price)}</td><td>${prev}</td><td><input type="number" min="0" step="0.001" id="qty-${i}" value="0" oninput="calculate()"></td><td id="cum-${i}">${prev}</td><td id="amount-${i}">0 DH</td></tr>`;
+ }).join("");
+ calculate();
+}
+function calculate(){
+ let total=0;
+ db.articles.forEach((a,i)=>{
+ const qty=Number($("qty-"+i)?.value||0);
+ const prev=previousQty(a.code);
+ $("cum-"+i).textContent=(prev+qty).toFixed(3);
+ $("amount-"+i).textContent=money(qty*a.price);
+ total+=qty*a.price;
+ });
+ $("currentTotal").textContent=money(total);
+}
+function saveAttachment(){
+ if(!db.market||!db.ot||!db.articles.length)return alert("Enregistre d'abord le marché, le BPU et l'OT.");
+ const date=$("attachDate").value,ref=$("attachRef").value.trim();
+ if(!date||!ref)return alert("Date et référence obligatoires.");
+ if(db.attachments.some(a=>a.ref===ref))return alert("Cette référence existe déjà.");
+ const lines=[];
+ for(let i=0;i<db.articles.length;i++){
+ const a=db.articles[i],qty=Number($("qty-"+i).value);
+ if(!Number.isFinite(qty)||qty<0)return alert("Quantité invalide : "+a.code);
+ if(previousQty(a.code)+qty>a.qty+0.000001)return alert("Dépassement de la quantité marché : "+a.code);
+ if(qty>0)lines.push({code:a.code,name:a.name,unit:a.unit,price:a.price,qty});
+ }
+ if(!lines.length)return alert("Saisis au moins une quantité.");
+ const amount=lines.reduce((s,l)=>s+l.qty*l.price,0);
+ db.attachments.push({ref,date,ot:{...db.ot},marketId:db.market.id,lines,amount});
+ if(persist()){
+ $("attachRef").value="";
+ go("history");
+ alert("Attachement enregistré.");
+ }
+}
+function renderHistory(){
+ const month=$("monthFilter").value;
+ const items=db.attachments.filter(a=>!month||a.date.startsWith(month));
+ $("historyList").innerHTML=items.length?items.map(a=>`<div class="item"><b>${esc(a.ref)}</b> <span class="pill">Validé</span><p class="muted">${esc(a.date)} • ${esc(a.ot.number)} • ${esc(a.ot.location)}</p><strong>${money(a.amount)}</strong></div>`).join(""):"<p class='muted'>Aucun attachement.</p>";
+}
+function download(name,content,type){
+ const blob=new Blob([content],{type});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportJSON(){
+ download("attach-vrd-backup.json",JSON.stringify(db,null,2),"application/json");
+}
+function exportCSV(){
+ const rows=[["Référence","Date","Marché","OT","Article","Désignation","Unité","Quantité","PU","Montant"]];
+ db.attachments.forEach(a=>a.lines.forEach(l=>rows.push([a.ref,a.date,a.marketId,a.ot.number,l.code,l.name,l.unit,l.qty,l.price,l.qty*l.price])));
+ const csv="\uFEFF"+rows.map(r=>r.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(";")).join("\r\n");
+ download("attachements-vrd.csv",csv,"text/csv;charset=utf-8");
+}
+function render(){
+ $("nbMarkets").textContent=db.market?1:0;
+ $("nbAttach").textContent=db.attachments.length;
+ $("totalAmount").textContent=money(db.attachments.reduce((s,a)=>s+a.amount,0));
+ $("lastOT").textContent=db.ot?.number||"—";
+ $("marketSummary").innerHTML=db.market?`<b>${esc(db.market.id)}</b><p>${esc(db.market.name)}</p><p class="muted">Montant : ${money(db.market.amount)}</p>`:"Aucun marché.";
+ $("otSummary").innerHTML=db.ot?`<b>${esc(db.ot.number)}</b><p>${esc(db.ot.name)}</p><p class="muted">${esc(db.ot.location)}</p>`:"Aucun OT.";
+ $("articleList").innerHTML=db.articles.length?db.articles.map(a=>`<div class="item"><b>${esc(a.code)} — ${esc(a.name)}</b><p class="muted">${esc(a.unit)} • PU : ${money(a.price)} • Quantité marché : ${a.qty}</p><button class="danger" onclick="removeArticle(${JSON.stringify(a.code).replace(/"/g,'&quot;')})">Supprimer</button></div>`).join(""):"<p class='muted'>Aucun article.</p>";
+ renderEntry();
+ renderHistory();
+}
+$("attachDate").value=today();
+if(db.market){
+ $("marketNumber").value=db.market.id;
+ $("marketName").value=db.market.name;
+ $("owner").value=db.market.owner||"";
+ $("company").value=db.market.company||"";
+ $("contractAmount").value=db.market.amount;
+}
+if(db.ot){
+ $("otNumber").value=db.ot.number;
+ $("otName").value=db.ot.name;
+ $("otLocation").value=db.ot.location;
+ $("otStart").value=db.ot.start;
+ $("otEnd").value=db.ot.end;
+}
+render();
+</script>
+</body>
+</html>
